@@ -33,6 +33,8 @@ def initialize_session_state():
             st.session_state[key] = value
 
 initialize_session_state()
+
+# ✅ 함수 정의 먼저
 def load_data_from_sheet():
     try:
         records = sheet.get_all_records()
@@ -53,7 +55,7 @@ def load_data_from_sheet():
             elif "불참" in status and name:
                 st.session_state.non_attendees[name] = reason
             elif team1 and team2 and score:
-                court_key = name  # 저장 시 "이름"에 session_key (예: before_1) 넣는 경우
+                court_key = name  # 이 부분은 경기 저장 방식에 따라 조정 필요
                 st.session_state.match_scores[court_key] = {
                     "팀1": team1.split(" & "),
                     "팀2": team2.split(" & "),
@@ -63,9 +65,9 @@ def load_data_from_sheet():
     except Exception as e:
         st.warning(f"구글 시트 데이터 불러오기 실패: {e}")
 
-        # ✅ 호출
-initialize_session_state()
-load_data_from_sheet()
+# ✅ 그 다음에 조건부 호출
+if not st.session_state.get("participants") and not st.session_state.get("non_attendees") and not st.session_state.get("match_scores"):
+    load_data_from_sheet()
 
 # ------------------ 🎨 스타일 ------------------
 st.set_page_config(page_title="서천고 배드민턴 부 운영 웹", layout="wide")
