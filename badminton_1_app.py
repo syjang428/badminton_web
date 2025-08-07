@@ -158,39 +158,70 @@ if not st.session_state.is_admin:
 
             for i in range(1, 4):
                 court_index = f"{session}_{i}"
-                if court_index in st.session_state.team_pairs:
-                    team1, team2 = st.session_state.team_pairs[court_index]
+                # ✅ 1. match_scores에 저장된 경기인지 확인
+                is_finished = court_index in st.session_state.match_scores
+
+                court_key = f"{session}_{i}"
+
+                if court_key in st.session_state.team_pairs:
+                    team1, team2 = st.session_state.team_pairs[court_key]
                     total_players = team1 + team2
-                    if len(total_players) == 4:
-                        paired_players.extend(total_players)
-                        st.markdown(f"#### 🎯 {i}코트")
+                    paired_players.extend(total_players)
+
+                    st.markdown(f"#### 🎯 {i}코트")
+
+                    # 이미 저장된 경기인지 확인
+                    is_finished = court_key in st.session_state.match_scores
+                    container_style = "opacity: 0.5;" if is_finished else ""
+
+                    # 흐리게 처리 시작
+                    with st.container():
+                        st.markdown(f"<div style='{container_style}'>", unsafe_allow_html=True)
+
+                        if is_finished:
+                            st.markdown("✅ **경기 완료**")
+
+                        # 팀 선택
                         col1, col2 = st.columns(2)
                         with col1:
-                            team1_sel = st.multiselect(f"1팀 선택 ({i}코트)", total_players, default=team1, key=f"team1_{court_index}")
+                            team1_sel = st.multiselect(
+                                f"1팀 선택 ({i}코트)", total_players, default=team1, key=f"team1_{court_key}", disabled=is_finished
+                            )
                         with col2:
-                            team2_sel = st.multiselect(f"2팀 선택 ({i}코트)", total_players, default=team2, key=f"team2_{court_index}")
+                            team2_sel = st.multiselect(
+                                f"2팀 선택 ({i}코트)", total_players, default=team2, key=f"team2_{court_key}", disabled=is_finished
+                            )
+
+                        # 점수 입력
                         score_col1, score_col2 = st.columns(2)
                         with score_col1:
-                            score_team1 = st.number_input("1팀 점수", min_value=0, max_value=30, key=f"score1_{court_index}")
+                            score_team1 = st.number_input(
+                                "1팀 점수", min_value=0, max_value=30, key=f"score1_{court_key}", disabled=is_finished
+                            )
                         with score_col2:
-                            score_team2 = st.number_input("2팀 점수", min_value=0, max_value=30, key=f"score2_{court_index}")
+                            score_team2 = st.number_input(
+                                "2팀 점수", min_value=0, max_value=30, key=f"score2_{court_key}", disabled=is_finished
+                            )
 
-                        if st.button("✅ 결과 저장", key=f"submit_{court_index}"):
+                        # 결과 저장 버튼
+                        if st.button("✅ 결과 저장", key=f"submit_{court_key}", disabled=is_finished):
                             score_str = f"{score_team1}-{score_team2}"
                             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            st.session_state.match_scores[court_index] = {
+
+                            st.session_state.match_scores[court_key] = {
                                 "팀1": team1_sel,
                                 "팀2": team2_sel,
                                 "점수": score_str,
                                 "시간": now
                             }
+
                             sheet.append_row([
-                                now, court_index, "", "", 
-                                " & ".join(team1_sel), 
-                                " & ".join(team2_sel), 
-                                score_str, now
+                                now, court_key, "", "", " & ".join(team1_sel), " & ".join(team2_sel), score_str, now
                             ])
-                            st.success(f"{i}코트 결과가 저장되었습니다.")
+
+                            st.rerun()  # 이 줄이 실행되면 그 아래는 실행 안 됨
+
+                        st.markdown("</div>", unsafe_allow_html=True)
 
             waiting_players = [p for p in players if p not in paired_players]
             if waiting_players:
@@ -199,6 +230,7 @@ if not st.session_state.is_admin:
 # ------------------ 🛠️ 관리자 기능 ------------------
 else:
     st.sidebar.markdown("## 📋 관리자 기능")
+    # 불참자 확인
     if st.sidebar.button("🚫 불참자 확인"):
         if st.session_state.non_attendees:
             st.markdown("### 🚫 불참자 목록")
@@ -208,19 +240,36 @@ else:
             ])
             st.dataframe(df_non_attendees, use_container_width=True)
 
+    # ✅ 조 편성 (항상 보이게 별도로 배치)
     if st.sidebar.button("🎲 조 편성"):
         team_pairs = {}
         for session in ["before", "after"]:
             players = [n for n, t in st.session_state.participants.items() if t.get(session)]
             random.shuffle(players)
-            teams = [players[i:i+4] for i in range(0, min(len(players), 12), 4)]
-            for i, team in enumerate(teams, start=1):
-                court_index = f"{session}_{i}"
-                team1 = team[:2]
-                team2 = team[2:] if len(team) >= 4 else []
-                team_pairs[court_index] = (team1, team2)
+
+            # 최대 3코트 (12명)까지 편성, 나머지는 대기
+            for i in range(3):
+                if len(players) >= 4:
+                    team = players[:4]
+                    players = players[4:]
+                    team1 = team[:2]
+                    team2 = team[2:]
+                    court_index = f"{session}_{i+1}"
+                    team_pairs[court_index] = (team1, team2)
+                else:
+                    break  # 더 이상 편성 불가
+
         st.session_state.team_pairs = team_pairs
         st.session_state.teams = list(team_pairs.keys())
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for court_index, (team1, team2) in team_pairs.items():
+            sheet.append_row([
+                now, court_index, "조편성", "",
+                " & ".join(team1),
+                " & ".join(team2), "", ""
+            ])
+
         st.success("✅ 점심 전/후 조가 편성되었습니다!")
         st.rerun()
 
@@ -243,7 +292,7 @@ else:
 
             # Google Sheets도 초기화 (헤더는 남겨둠)
             sheet.clear()
-            sheet.append_row(["시간", "이름/코트", "상태", "불참 사유", "팀1", "팀2", "점수", "시간"])
+            sheet.append_row(["시간", "이름/코트", "상태", "불참 사유", "팀1", "팀2", "점수", "시간(다시)"])
             st.success("세션 및 구글 시트 초기화 완료")
 
 
