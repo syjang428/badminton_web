@@ -78,7 +78,7 @@ st.markdown("""
     .team-box {border: 2px solid #00bcd4; border-radius: 10px; padding: 10px; margin-bottom: 20px; background-color: #f0f9fb;}
     .waiting {font-size: 14px; color: gray;}
     </style>
-    <div class="title">🏸 서천고 배드민턴 부 운영 웹</div>
+    <div class="title">🏸 배드민턴 경기 편성</div>
     <hr>
 """, unsafe_allow_html=True)
 
@@ -104,6 +104,12 @@ if not st.session_state.is_admin:
             if st.button("✅ 제출"):
                 if name.strip():
                     st.session_state.participants[name] = {"before": before, "after": after}
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    time_str = []
+                    if before: time_str.append("전")
+                    if after: time_str.append("후")
+                    time_str = ", ".join(time_str) if time_str else "미참여"
+                    sheet.append_row([now, name, f"참가 ({time_str})"])
                     st.success("제출을 완료하였습니다.")
                 else:
                     st.warning("이름을 입력해주세요.")
@@ -113,16 +119,18 @@ if not st.session_state.is_admin:
             if st.button("🚫 불참 제출"):
                 if name.strip() and reason.strip():
                     st.session_state.non_attendees[name] = reason
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    sheet.append_row([now, name, "불참", reason])
                     st.success("제출을 완료하였습니다.")
                 elif not name.strip():
                     st.warning("이름을 입력해주세요.")
                 else:
                     st.warning("불참 사유를 작성해주세요.")
 
-        st.markdown("### 🧲 참가자 현황")
+        st.markdown("### 👥 참가자 현황")
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("**🍱 점심 전 참가자**")
+            st.markdown("**⬅️ 점심 전 참가자**")
             before_players = [n for n, t in st.session_state.participants.items() if t.get("before")]
             if before_players:
                 for n in before_players:
@@ -131,7 +139,7 @@ if not st.session_state.is_admin:
                 st.write("없음")
 
         with col2:
-            st.markdown("**🍵 점심 후 참가자**")
+            st.markdown("**➡️ 점심 후 참가자**")
             after_players = [n for n, t in st.session_state.participants.items() if t.get("after")]
             if after_players:
                 for n in after_players:
@@ -140,13 +148,13 @@ if not st.session_state.is_admin:
                 st.write("없음")
 
     if st.session_state.teams:
-        st.markdown("### 🎽 조 편성 결과")
+        st.markdown("### 🎲 조 편성 결과")
 
         for session in ["before", "after"]:
             players = [n for n, t in st.session_state.participants.items() if t.get(session)]
             paired_players = []
 
-            st.markdown(f"## {'🍱 점심 전' if session == 'before' else '🍵 점심 후'} 조 편성")
+            st.markdown(f"## {'⬅️ 점심 전' if session == 'before' else '➡️ 점심 후'} 조 편성")
 
             for i in range(1, 4):
                 court_index = f"{session}_{i}"
@@ -169,12 +177,19 @@ if not st.session_state.is_admin:
 
                         if st.button("✅ 결과 저장", key=f"submit_{court_index}"):
                             score_str = f"{score_team1}-{score_team2}"
+                            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             st.session_state.match_scores[court_index] = {
                                 "팀1": team1_sel,
                                 "팀2": team2_sel,
                                 "점수": score_str,
-                                "시간": datetime.now().strftime("%H:%M:%S")
+                                "시간": now
                             }
+                            sheet.append_row([
+                                now, court_index, "", "", 
+                                " & ".join(team1_sel), 
+                                " & ".join(team2_sel), 
+                                score_str, now
+                            ])
                             st.success(f"{i}코트 결과가 저장되었습니다.")
 
             waiting_players = [p for p in players if p not in paired_players]
@@ -184,7 +199,7 @@ if not st.session_state.is_admin:
 # ------------------ 🛠️ 관리자 기능 ------------------
 else:
     st.sidebar.markdown("## 📋 관리자 기능")
-    if st.sidebar.button("👥 불참자 확인"):
+    if st.sidebar.button("🚫 불참자 확인"):
         if st.session_state.non_attendees:
             st.markdown("### 🚫 불참자 목록")
             df_non_attendees = pd.DataFrame([
@@ -223,9 +238,14 @@ else:
             st.info("제출된 경기가 없습니다.")
 
     if st.sidebar.button("🔄 초기화"):
-        for key in ["participants", "non_attendees", "attendance", "game_results", "teams", "team_pairs", "match_scores", "partner_selections"]:
-            st.session_state[key] = {} if isinstance(st.session_state[key], dict) else []
-        st.success("세션이 초기화되었습니다.")
+            for key in ["participants", "non_attendees", "attendance", "game_results", "teams", "team_pairs", "match_scores", "partner_selections"]:
+                st.session_state[key] = {} if isinstance(st.session_state[key], dict) else []
+
+            # Google Sheets도 초기화 (헤더는 남겨둠)
+            sheet.clear()
+            sheet.append_row(["시간", "이름/코트", "상태", "불참 사유", "팀1", "팀2", "점수", "시간"])
+            st.success("세션 및 구글 시트 초기화 완료")
+
 
     if st.sidebar.button("🚪 관리자 모드 종료"):
         st.session_state.is_admin = False
