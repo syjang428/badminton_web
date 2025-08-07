@@ -11,7 +11,7 @@ scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/au
 creds_dict = st.secrets["gcp_service_account"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open_by_url(st.secrets["https://docs.google.com/spreadsheets/d/1YlqAupxgc4dKiuBH79IOzJYWX32moKbVne9bYQAd-QM/edit?usp=sharing"]).sheet1
+sheet = client.open_by_url(st.secrets["spreadsheet_url"]).sheet1
 
 # ------------------ 🧠 세션 상태 초기화 ------------------
 def initialize_session_state():
