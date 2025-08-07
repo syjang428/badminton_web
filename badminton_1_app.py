@@ -13,6 +13,68 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 sheet = client.open_by_url(st.secrets["spreadsheet_url"]).sheet1
 
+
+# ✅ 1. 여기 붙여넣으세요
+def load_data_from_sheet():
+    try:
+        records = sheet.get_all_records()
+        team_pairs = {}
+        teams = []
+
+        for record in records:
+            name = record.get("이름", "").strip() or record.get("이름/코트", "").strip()
+            status = record.get("상태", "")
+            reason = record.get("불참 사유", "")
+            team1 = record.get("팀1", "")
+            team2 = record.get("팀2", "")
+            score = record.get("점수", "")
+            time = record.get("시간", "")
+
+            # 참가자
+            if "참가" in status and name:
+                st.session_state.participants[name] = {
+                    "before": "전" in status,
+                    "after": "후" in status
+                }
+
+            # 불참자
+            elif "불참" in status and name:
+                st.session_state.non_attendees[name] = reason
+
+            # 조편성
+            elif status == "조편성" and team1 and team2:
+                st.session_state.team_pairs[name] = (
+                    team1.split(" & "), team2.split(" & ")
+                )
+                teams.append(name)
+
+            # 경기 결과
+            elif team1 and team2 and score and not status == "조편성":
+                court_key = name
+                st.session_state.match_scores[court_key] = {
+                    "팀1": team1.split(" & "),
+                    "팀2": team2.split(" & "),
+                    "점수": score,
+                    "시간": time
+                }
+
+        st.session_state.teams = teams
+
+    except Exception as e:
+        st.warning(f"구글 시트 데이터 불러오기 실패: {e}")
+
+
+# ✅ 2. 이 아래는 기존 세션 초기화 부분 유지
+if "participants" not in st.session_state:
+    st.session_state.participants = {}
+    st.session_state.non_attendees = {}
+    st.session_state.team_pairs = {}
+    st.session_state.match_scores = {}
+    st.session_state.teams = []
+
+# ✅ 3. 그리고 이 시점에 불러오기!
+load_data_from_sheet()
+
 # ------------------ 🧠 세션 상태 초기화 ------------------
 def initialize_session_state():
     defaults = {
